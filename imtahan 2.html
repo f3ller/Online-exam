@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dinamik Variantlı Test Sistemi</title>
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      max-width: 750px;
+      margin: 40px auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+    }
+    textarea, input, button, select {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      padding: 8px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-family: inherit;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .option img, .question-image {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin-top: 5px;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+    }
+    .correct { color: green; font-weight: bold; }
+    .incorrect { color: red; font-weight: bold; }
+    #answerOptions label {
+      cursor: pointer;
+      user-select: none;
+    }
+    #stats {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #e9ecef;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-weight: bold;
+    }
+    .subject-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 5px 0;
+      padding: 6px 10px;
+      background: #f1f1f1;
+      border-radius: 4px;
+    }
+    .subject-item button {
+      width: auto;
+      padding: 4px 8px;
+      background-color: #dc3545;
+      border: none;
+      border-radius: 4px;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .subject-item button:hover {
+      background-color: #b02a37;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Yeni Fənn Əlavə Et</h2>
+  <input type="text" id="newSubjectInput" placeholder="Fənn adı daxil edin..." />
+  <button onclick="addNewSubject()">Fənni Əlavə Et</button>
+
+  <h3>Fənnlər</h3>
+  <div id="subjectList"></div>
+
+  <hr />
+
+  <h2>Yeni Sual Əlavə Et</h2>
+
+  <label>Fənni seç:</label>
+  <select id="subjectSelect"></select>
+
+  <textarea id="questionText" placeholder="Sualın mətnini daxil edin..."></textarea>
+  <label>Sual üçün şəkil əlavə et (istəyə görə):</label>
+  <input type="file" accept="image/*" id="questionImage" />
+
+  <label>Cavab variantlarının sayı:</label>
+  <select id="answerCountSelect" onchange="renderAnswerInputs()">
+    <option value="2">2 variant</option>
+    <option value="3">3 variant</option>
+    <option value="4">4 variant</option>
+    <option value="5" selected>5 variant</option>
+  </select>
+
+  <h4>Cavab Variantları:</h4>
+  <div id="answers"></div>
+
+  <label>Düzgün cavabı seç:</label>
+  <select id="correctAnswer"></select>
+
+  <button onclick="addQuestion()">Sualı Əlavə Et</button>
+  <button onclick="clearQuestions()">Bütün Sualları Sil</button>
+
+  <hr />
+  <h3>Testə Başla</h3>
+  <select id="testSubjectSelect"></select>
+  <button onclick="showRandomQuestion()">Təsadüfi Sual Göstər</button>
+
+  <div class="question-box" id="quizBox" style="display:none;">
+    <h3 id="displayQuestion"></h3>
+    <img id="questionImageDisplay" class="question-image" style="display:none;" />
+    <div id="answerOptions"></div>
+    <button onclick="checkAnswer()">Cavabı Yoxla</button>
+    <p id="result"></p>
+  </div>
+
+  <div id="stats">
+    ✅ Düzgün cavablar: <span id="correctCount">0</span><br />
+    ❌ Səhv cavablar: <span id="incorrectCount">0</span><br />
+    📚 Əlavə olunan sualların sayı: <span id="totalQuestions">0</span>
+  </div>
+
+  <script>
+    let questions = {};
+    let correctTotal = 0;
+    let incorrectTotal = 0;
+    let totalQuestionCount = 0;
+    let currentQuestion = null;
+    let currentCorrect = null;
+
+    // Hər fənn üçün görülmüş sualların indeksini saxlayan obyekt
+    let seenQuestions = {};
+
+    // Əvvəlcə sual əlavə sahələrini dinamik yaratmaq üçün
+    function renderAnswerInputs() {
+      const count = +document.getElementById("answerCountSelect").value;
+      const answersDiv = document.getElementById("answers");
+      const correctSelect = document.getElementById("correctAnswer");
+
+      answersDiv.innerHTML = "";
+      correctSelect.innerHTML = "";
+
+      for (let i = 0; i < count; i++) {
+        let letter = String.fromCharCode(65 + i); // A, B, C, D, E
+        const wrapper = document.createElement("div");
+        wrapper.style.marginBottom = "10px";
+
+        const textInput = document.createElement("input");
+        textInput.type = "text";
+        textInput.placeholder = `Cavab ${letter}`;
+        textInput.id = "text" + letter;
+        textInput.style.width = "70%";
+        textInput.style.display = "inline-block";
+
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "image/*";
+        fileInput.id = "img" + letter;
+        fileInput.style.width = "28%";
+        fileInput.style.display = "inline-block";
+        fileInput.style.marginLeft = "2%";
+
+        wrapper.appendChild(textInput);
+        wrapper.appendChild(fileInput);
+        answersDiv.appendChild(wrapper);
+
+        const option = document.createElement("option");
+        option.value = letter;
+        option.textContent = letter;
+        correctSelect.appendChild(option);
+      }
+    }
+
+    // Fənnləri DOM-da göstərmək üçün
+    function renderSubjectList() {
+      const subjectListDiv = document.getElementById("subjectList");
+      subjectListDiv.innerHTML = "";
+      for (let subj in questions) {
+        const div = document.createElement("div");
+        div.className = "subject-item";
+        div.innerHTML = `<span>${subj}</span> <button onclick="deleteSubject('${subj}')">Sil</button>`;
+        subjectListDiv.appendChild(div);
+      }
+      updateSubjectSelects();
+    }
+
+    // Seçim dropdown-ları yenilə
+    function updateSubjectSelects() {
+      const subjectSelect = document.getElementById("subjectSelect");
+      const testSubjectSelect = document.getElementById("testSubjectSelect");
+      subjectSelect.innerHTML = "";
+      testSubjectSelect.innerHTML = "";
+      for (let subj in questions) {
+        const option1 = document.createElement("option");
+        option1.value = subj;
+        option1.textContent = subj;
+        subjectSelect.appendChild(option1);
+
+        const option2 = document.createElement("option");
+        option2.value = subj;
+        option2.textContent = subj;
+        testSubjectSelect.appendChild(option2);
+      }
+    }
+
+    // Yeni fənn əlavə et
+    function addNewSubject() {
+      const input = document.getElementById("newSubjectInput");
+      const newSubj = input.value.trim();
+      if (!newSubj) {
+        alert("Fənn adı boş ola bilməz.");
+        return;
+      }
+      if (questions[newSubj]) {
+        alert("Bu fənn artıq mövcuddur.");
+        return;
+      }
+      questions[newSubj] = [];
+      saveQuestions();
+      renderSubjectList();
+      input.value = "";
+      alert(`"${newSubj}" fənni əlavə olundu.`);
+    }
+
+    // Fənni sil (fənn və sualları silir)
+    function deleteSubject(subject) {
+      if (!confirm(`"${subject}" fənnini və ona aid bütün sualları silmək istədiyinizə əminsiniz?`)) return;
+      delete questions[subject];
+      saveQuestions();
+      renderSubjectList();
+      calculateTotalQuestions();
+      alert(`"${subject}" fənni və sualları silindi.`);
+    }
+
+    // Sualları yerli yaddaşa yaz
+    function saveQuestions() {
+      localStorage.setItem("savedQuestions", JSON.stringify(questions));
+    }
+
+    // Yaddaşdan sualları yüklə
+    function loadQuestions() {
+      const saved = localStorage.getItem("savedQuestions");
+      if (saved) {
+        questions = JSON.parse(saved);
+      } else {
+        questions = {};
+      }
+    }
+
+    // Sualları say hesabla və göstər
+    function calculateTotalQuestions() {
+      totalQuestionCount = 0;
+      for (let subj in questions) {
+        totalQuestionCount += questions[subj].length;
+      }
+      document.getElementById("totalQuestions").innerText = totalQuestionCount;
+    }
+
+    function getImageURL(fileInput) {
+      return fileInput.files[0] ? URL.createObjectURL(fileInput.files[0]) : null;
+    }
+
+    // Yeni sual əlavə et
+    function addQuestion() {
+      const subject = document.getElementById("subjectSelect").value;
+      if (!subject) {
+        alert("Zəhmət olmasa fənn seçin.");
+        return;
+      }
+
+      const questionText = document.getElementById("questionText").value.trim();
+      if (!questionText) {
+        alert("Sual mətni boş ola bilməz.");
+        return;
+      }
+
+      const questionImg = getImageURL(document.getElementById("questionImage"));
+      const count = +document.getElementById("answerCountSelect").value;
+
+      let answers = {};
+      for (let i = 0; i < count; i++) {
+        let letter = String.fromCharCode(65 + i);
+        const text = document.getElementById("text" + letter).value.trim();
+        const image = getImageURL(document.getElementById("img" + letter));
+        if (!text && !image) {
+          alert(`${letter} variantı üçün mətn və ya şəkil daxil edin.`);
+          return;
+        }
+        answers[letter] = { text, image };
+      }
+
+      const correct = document.getElementById("correctAnswer").value;
+      questions[subject].push({ question: questionText, questionImg, answers, correct });
+
+      saveQuestions();
+      calculateTotalQuestions();
+
+      // Formu təmizlə
+      document.getElementById("questionText").value = "";
+      document.getElementById("questionImage").value = "";
+      for (let i = 0; i < count; i++) {
+        let letter = String.fromCharCode(65 + i);
+        document.getElementById("text" + letter).value = "";
+        document.getElementById("img" + letter).value = "";
+      }
+
+      alert("Sual əlavə olundu!");
+    }
+
+    // Bütün sualları sil (yeni əlavə, funksiyanı sən əlavə etmişsən, mən də burda qoyuram)
+    function clearQuestions() {
+      if (!confirm("Bütün sualları silmək istədiyinizə əminsiniz?")) return;
+      for (let subj in questions) {
+        questions[subj] = [];
+      }
+      saveQuestions();
+      calculateTotalQuestions();
+      alert("Bütün suallar silindi.");
+    }
+
+    // Array-ı qarışdırmaq üçün
+    function shuffle(array) {
+      return array.sort(() => Math.random() - 0.5);
+    }
+
+    // Təkrar olmayan təsadüfi sual göstər
+    function showRandomQuestion() {
+      const subject = document.getElementById("testSubjectSelect").value;
+      if (!questions[subject] || questions[subject].length === 0) {
+        alert(`${subject} fənni üçün sual yoxdur.`);
+        return;
+      }
+
+      if (!seenQuestions[subject]) {
+        seenQuestions[subject] = [];
+      }
+
+      const totalQuestionsForSubject = questions[subject].length;
+
+      if (seenQuestions[subject].length === totalQuestionsForSubject) {
+        alert(`"${subject}" fənni üçün bütün suallar göstərildi.`);
+        return;
+      }
+
+      let availableIndexes = [];
+      for (let i = 0; i < totalQuestionsForSubject; i++) {
+        if (!seenQuestions[subject].includes(i)) {
+          availableIndexes.push(i);
+        }
+      }
+
+      const randomIndex = availableIndexes[Math.floor(Math.random() * availableIndexes.length)];
+      const q = questions[subject][randomIndex];
+      currentQuestion = q;
+      currentCorrect = q.correct;
+      seenQuestions[subject].push(randomIndex);
+
+      // Sualı göstər
+      document.getElementById("quizBox").style.display = "block";
+      document.getElementById("result").innerText = "";
+      document.getElementById("displayQuestion").innerText = q.question;
+
+      // Sual şəkli varsa göstər
+      const questionImgElem = document.getElementById("questionImageDisplay");
+      if (q.questionImg) {
+        questionImgElem.src = q.questionImg;
+        questionImgElem.style.display = "block";
+      } else {
+        questionImgElem.style.display = "none";
+      }
+
+      // Cavab variantları göstərilir
+      const answerOptionsDiv = document.getElementById("answerOptions");
+      answerOptionsDiv.innerHTML = "";
+      // Variantları qarışdır
+      let keys = Object.keys(q.answers);
+      keys = shuffle(keys);
+
+      keys.forEach((key) => {
+        const ans = q.answers[key];
+
+        const label = document.createElement("label");
+        label.style.display = "block";
+        label.style.marginBottom = "8px";
+
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = "quizAnswer";
+        radio.value = key;
+        radio.style.marginRight = "10px";
+
+        label.appendChild(radio);
+        if (ans.text) {
+          label.appendChild(document.createTextNode(`${key}: ${ans.text}`));
+        }
+        if (ans.image) {
+          const img = document.createElement("img");
+          img.src = ans.image;
+          img.className = "option img";
+          label.appendChild(img);
+        }
+
+        answerOptionsDiv.appendChild(label);
+      });
+    }
+
+    // Cavabı yoxla
+    function checkAnswer() {
+      const radios = document.getElementsByName("quizAnswer");
+      let selected = null;
+      for (const r of radios) {
+        if (r.checked) {
+          selected = r.value;
+          break;
+        }
+      }
+      if (!selected) {
+        alert("Zəhmət olmasa cavab variantlarından birini seçin.");
+        return;
+      }
+
+      const resultP = document.getElementById("result");
+
+      if (selected === currentCorrect) {
+        resultP.textContent = "Düzgün cavab!";
+        resultP.className = "correct";
+        correctTotal++;
+        document.getElementById("correctCount").innerText = correctTotal;
+      } else {
+        resultP.textContent = `Səhv cavab! Düzgün cavab: ${currentCorrect}`;
+        resultP.className = "incorrect";
+        incorrectTotal++;
+        document.getElementById("incorrectCount").innerText = incorrectTotal;
+      }
+    }
+
+    // İlk render işləri
+    loadQuestions();
+    renderSubjectList();
+    renderAnswerInputs();
+    calculateTotalQuestions();
+  </script>
+</body>
+</html>
